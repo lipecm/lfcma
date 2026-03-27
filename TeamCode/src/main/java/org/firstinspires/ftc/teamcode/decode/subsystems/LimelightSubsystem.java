@@ -1,10 +1,9 @@
 package org.firstinspires.ftc.teamcode.decode.subsystems;
 
-import com.qualcomm.hardware.limelightvision.LLFiducialResult;
 import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.LLResultTypes;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.hardware.HardwareMap;
-import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import java.util.List;
 
 /**
@@ -30,14 +29,14 @@ public class LimelightSubsystem {
     /**
      * Retorna o melhor fiducial da lista de IDs permitidos (o mais centralizado).
      */
-    public LLFiducialResult getMelhorFiducial(int[] tagsPermitidas) {
+    public LLResultTypes.FiducialResult getMelhorFiducial(int[] tagsPermitidas) {
         LLResult res = getResultado();
         if (res == null || !res.isValid()) return null;
 
-        List<LLFiducialResult> fiducials = res.getFiducialResults();
-        LLFiducialResult melhor = null;
+        List<LLResultTypes.FiducialResult> fiducials = res.getFiducialResults();
+        LLResultTypes.FiducialResult melhor = null;
 
-        for (LLFiducialResult f : fiducials) {
+        for (LLResultTypes.FiducialResult f : fiducials) {
             boolean permitida = false;
             for (int id : tagsPermitidas) {
                 if (f.getFiducialId() == id) {
@@ -48,7 +47,7 @@ public class LimelightSubsystem {
 
             if (permitida) {
                 // Prioriza o alvo com menor erro horizontal (mais central)
-                if (melhor == null || Math.abs(f.getTx()) < Math.abs(melhor.getTx())) {
+                if (melhor == null || Math.abs(f.getTargetXDegrees()) < Math.abs(melhor.getTargetXDegrees())) {
                     melhor = f;
                 }
             }
@@ -61,8 +60,8 @@ public class LimelightSubsystem {
     }
 
     public double getErroHorizontal(int[] tagsPermitidas) {
-        LLFiducialResult f = getMelhorFiducial(tagsPermitidas);
-        return (f != null) ? f.getTx() : 0;
+        LLResultTypes.FiducialResult f = getMelhorFiducial(tagsPermitidas);
+        return (f != null) ? f.getTargetXDegrees() : 0;
     }
 
     /**
@@ -70,11 +69,10 @@ public class LimelightSubsystem {
      * Nota: O valor 1500 é uma constante de calibração que depende da altura/ângulo da câmera.
      */
     public double getDistanciaEstimada(int[] tagsPermitidas) {
-        LLFiducialResult f = getMelhorFiducial(tagsPermitidas);
+        LLResultTypes.FiducialResult f = getMelhorFiducial(tagsPermitidas);
         if (f != null) {
-            // Usando a área (ta) como base para distância, conforme lógica anterior.
-            // Calibre este valor no robô real para maior precisão.
-            return 1500.0 / f.getTa();
+            // Usando a área (targetArea) como base para distância.
+            return 1500.0 / f.getTargetArea();
         }
         return 0;
     }
