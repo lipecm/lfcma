@@ -1,37 +1,56 @@
 package org.firstinspires.ftc.teamcode.decode.subsystems;
 
+import com.pedropathing.follower.Follower;
 import com.qualcomm.robotcore.hardware.Gamepad;
 
 public class DriveSubsystem {
     private RobotHardware robot;
+    private Follower follower;
 
-    public DriveSubsystem(RobotHardware robot) {
+    public DriveSubsystem(RobotHardware robot, Follower follower) {
         this.robot = robot;
+        this.follower = follower;
     }
 
     /**
-     * Move o robô usando a matemática padrão Mecanum.
-     * Ajustado para o mapeamento: d0=FL, d1=FR, d2=RL, d3=RR
+     * Move o robô usando campo-centrado (Field-Centric).
+     * Mapeamento: Analógico DIREITO para translação, ESQUERDO para rotação.
      */
     public void dirigir(Gamepad gamepad) {
-        // Driver 1 controla a tração
-        double y = -gamepad.left_stick_y; // Frente/Trás
-        double x = gamepad.left_stick_x * 1.1; // Lado/Lado (Strafe)
-        double rx = gamepad.right_stick_x; // Rotação
+        // Sensibilidade quadrática (preservando o sinal)
+        double ly = -gamepad.right_stick_y * Math.abs(gamepad.right_stick_y);
+        double lx = -gamepad.right_stick_x * Math.abs(gamepad.right_stick_x);
+        double rot = -gamepad.left_stick_x; // Rotação no analógico esquerdo
 
-        // Cálculo de potências
-        double fl = y + x + rx;
-        double rl = y - x + rx;
-        double fr = y - x - rx;
-        double rr = y + x - rx;
+        // Obtém o heading do Pedro Pathing (em radianos)
+        double heading = (follower != null) ? follower.getPose().getHeading() : 0;
+        
+        // Rotação vetorial para Field-Centric (Removido o PI/2 que causaria offset de 90°)
+        double xlinha = lx * Math.cos(heading) - ly * Math.sin(heading);
+        double ylinha = lx * Math.sin(heading) + ly * Math.cos(heading);
 
-        // Normalização
+        // Mixagem de motores (Mecanum)
+        // FL = -ylinha + xlinha + rot
+        // FR = -ylinha - xlinha - rot
+        // RL = -ylinha - xlinha + rot
+        // RR = -ylinha + xlinha - rot
+        
+        double fl = -ylinha + xlinha + rot;
+        double fr = -ylinha - xlinha - rot;
+        double rl = -ylinha - xlinha + rot;
+        double rr = -ylinha + xlinha - rot;
+
+        // Normalização de potência
         double max = Math.max(Math.abs(fl), Math.max(Math.abs(rl), 
                      Math.max(Math.abs(fr), Math.max(Math.abs(rr), 1.0))));
 
         robot.frontalEsquerdo.setPower(fl / max);
-        robot.traseiroEsquerdo.setPower(rl / max);
         robot.frontalDireito.setPower(fr / max);
+        robot.traseiroEsquerdo.setPower(rl / max);
         robot.traseiroDireito.setPower(rr / max);
+    }
+
+    public void setFollower(Follower follower) {
+        this.follower = follower;
     }
 }

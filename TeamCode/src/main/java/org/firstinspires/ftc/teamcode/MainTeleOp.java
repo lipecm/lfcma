@@ -1,19 +1,21 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.hardware.limelightvision.LLResult;
+import com.pedropathing.follower.Follower;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 
-import org.firstinspires.ftc.teamcode.decode.subsystems.Constants;
 import org.firstinspires.ftc.teamcode.decode.subsystems.DriveSubsystem;
 import org.firstinspires.ftc.teamcode.decode.subsystems.IntakeSubsystem;
 import org.firstinspires.ftc.teamcode.decode.subsystems.LimelightSubsystem;
 import org.firstinspires.ftc.teamcode.decode.subsystems.RobotHardware;
 import org.firstinspires.ftc.teamcode.decode.subsystems.ShooterSubsystem;
 import org.firstinspires.ftc.teamcode.decode.subsystems.TurretSubsystem;
+import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
+
+import java.util.Locale;
 
 /**
  * Classe Base para o TeleOp.
- * Removido Pedro Pathing conforme solicitado.
+ * Integração de Transmissão Mecanum Field-Centric, Turret e Shooter.
  */
 public abstract class MainTeleOp extends OpMode {
 
@@ -23,6 +25,7 @@ public abstract class MainTeleOp extends OpMode {
     protected ShooterSubsystem shooter;
     protected TurretSubsystem turret;
     protected LimelightSubsystem limelight;
+    protected Follower follower;
 
     protected boolean isBlueAlliance = true;
 
@@ -31,7 +34,10 @@ public abstract class MainTeleOp extends OpMode {
         robot = new RobotHardware();
         robot.init(hardwareMap);
 
-        drive = new DriveSubsystem(robot);
+        // Pedro Pathing fornece o Heading para o Field-Centric
+        follower = Constants.createFollower(hardwareMap);
+
+        drive = new DriveSubsystem(robot, follower);
         intake = new IntakeSubsystem(robot);
         shooter = new ShooterSubsystem(robot);
         turret = new TurretSubsystem(robot);
@@ -39,13 +45,19 @@ public abstract class MainTeleOp extends OpMode {
         limelight = new LimelightSubsystem();
         limelight.init(hardwareMap);
 
-        telemetry.addData("Status", "Inicializado - Aliança: " + (isBlueAlliance ? "AZUL" : "VERMELHA"));
+        telemetry.addData("Status", "Pronto - Aliança: " + (isBlueAlliance ? "AZUL" : "VERMELHA"));
         telemetry.update();
     }
 
     @Override
     public void loop() {
-        // --- SENSORES ---
+        // Atualiza odometria/seguidor
+        follower.update();
+
+        // IDs das Tags baseados na aliança
+        int[] tagsAlvo = isBlueAlliance ? LimelightSubsystem.BLUE_TAGS : LimelightSubsystem.RED_TAGS;
+
+        // --- SENSORES DE CARGA (Bolas) ---
         int bolasNoRobo = 0;
         double limitePresenca = 0.35;
         if (robot.sensorBola1.getVoltage() < limitePresenca) bolasNoRobo++;
@@ -53,6 +65,7 @@ public abstract class MainTeleOp extends OpMode {
         if (robot.sensorBola3.getVoltage() < limitePresenca) bolasNoRobo++;
 
         // --- TRAÇÃO ---
+        // Stick Direito = Move | Stick Esquerdo = Gira
         drive.dirigir(gamepad1);
 
         // --- INTAKE ---
@@ -61,46 +74,43 @@ public abstract class MainTeleOp extends OpMode {
         intake.atualizar(querColetar, querEjetar);
 
         // --- VISÃO E TORRETA ---
-        LLResult alvo = limelight.getResultado();
-        double erroTX = limelight.getErroHorizontal();
-        double distancia = limelight.getDistanciaEstimada();
-        boolean alvoDetectado = limelight.temAlvo();
+        double erroTX = limelight.getErroHorizontal(tagsAlvo);
+        double distancia = limelight.getDistanciaEstimada(tagsAlvo);
+        boolean alvoDetectado = limelight.temAlvo(tagsAlvo);
 
-        // Lógica de Mira: Prioridade Limelight (AprilTag) > Manual
+        // Mira Automática (Segue apenas as tags da aliança selecionada)
         if (gamepad1.left_trigger > 0 || gamepad2.left_trigger > 0) {
             if (alvoDetectado) {
-                // Se vê AprilTag, mira nela (mais preciso) usando PID
                 turret.mirarLimelight(erroTX);
-            } else {
-                // Sem localização externa (Pedro Pathing), não podemos mirar por coordenada field-centric de forma confiável.
-                // Mantém a torreta parada ou permite ajuste manual fino.
-                turret.controleManual(0);
             }
         } else {
-            turret.controleManual(gamepad2.left_stick_x * 0.5);
+            // Controle manual no Analógico Esquerdo do GP2
+            turret.controleManual(gamepad2.left_stick_x * 0.6);
         }
 
         // --- SHOOTER ---
         boolean querAtirar = gamepad1.right_trigger > 0 || gamepad2.right_trigger > 0;
         shooter.calcularEAtualizarVelocidade(querAtirar, distancia);
 
-        boolean miraBoa = Math.abs(erroTX) <= 5;
+        // Disparo: requer mira centralizada (erro < 5 graus)
+        boolean miraBoa = Math.abs(erroTX) <= 5 || !alvoDetectado; // Se não houver alvo, permite manual
         boolean botaoDisparo = gamepad1.cross || gamepad1.square || gamepad2.square;
         shooter.gerenciarDisparo(botaoDisparo, bolasNoRobo, miraBoa);
 
         // --- TELEMETRIA ---
         telemetry.addData("Aliança", isBlueAlliance ? "AZUL" : "VERMELHA");
-        telemetry.addData("Bolas", bolasNoRobo);
+        telemetry.addData("Alvo Correto Visível", alvoDetectado ? "SIM" : "NÃO");
         
         if (alvoDetectado) {
-            telemetry.addData("Distância AprilTag (pol)", String.format("%.1f", distancia));
-            telemetry.addData("Erro TX", String.format("%.2f", erroTX));
+            // Distância calculada via Limelight (ajuste a constante 1500 no subsistema se necessário)
+            telemetry.addData("Distância ao Alvo (pol)", String.format(Locale.US, "%.1f", distancia));
+            telemetry.addData("Erro Horizontal (TX)", String.format(Locale.US, "%.2f", erroTX));
         } else {
-            telemetry.addData("Distância", "ALVO NÃO DETECTADO");
+            telemetry.addData("Distância", "PROCURANDO TAGS " + (isBlueAlliance ? "11-13" : "14-16"));
         }
-        
-        telemetry.addData("Shooter RPM Alvo", String.format("%.0f", shooter.getRpmAlvo()));
-        telemetry.addData("Shooter RPM Atual", String.format("%.0f", robot.shooter1.getVelocity()));
+
+        telemetry.addData("Bolas no Intake", bolasNoRobo);
+        telemetry.addData("Heading", String.format(Locale.US, "%.1f°", Math.toDegrees(follower.getPose().getHeading())));
         telemetry.update();
     }
 

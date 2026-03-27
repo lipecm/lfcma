@@ -20,14 +20,15 @@ public class RobotHardware {
     public AnalogInput sensorBola1, sensorBola2, sensorBola3;
 
     public void init(HardwareMap hwMap) {
-        // --- MAPEAMENTO DA TRAÇÃO ---
-        // Ajustado para o padrão comum: d0=FL, d1=FR, d2=RL, d3=RR
-        frontalEsquerdo = hwMap.get(DcMotor.class, "d0");
-        frontalDireito = hwMap.get(DcMotor.class, "d1");
-        traseiroEsquerdo = hwMap.get(DcMotor.class, "d2");
-        traseiroDireito = hwMap.get(DcMotor.class, "d3");
+        // --- MAPEAMENTO DA TRAÇÃO (Ajustado conforme Mecanum.java) ---
+        // c1=FL, c2=FR, c3=RL, c0=RR
+        frontalEsquerdo = hwMap.get(DcMotor.class, "c1");
+        frontalDireito = hwMap.get(DcMotor.class, "c2");
+        traseiroEsquerdo = hwMap.get(DcMotor.class, "c3");
+        traseiroDireito = hwMap.get(DcMotor.class, "c0");
 
         // Inverter os motores do lado direito para que potência positiva mova o robô para frente
+        // (Ajuste baseado no comportamento físico esperado)
         frontalDireito.setDirection(DcMotor.Direction.REVERSE);
         traseiroDireito.setDirection(DcMotor.Direction.REVERSE);
 

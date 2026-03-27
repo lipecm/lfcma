@@ -10,7 +10,7 @@ public class Constants {
     // --- CONSTANTES DO SHOOTER ---
     public static final double SHOOTER_BASE_RPM = 1150; 
     public static final double SHOOTER_MARGEM_ERRO_RPM = 125;
-    public static final double SHOOTER_RPM_REPOUSO = 1300;
+    public static final double SHOOTER_RPM_REPOUSO = 0;
 
     // TreeMap para velocidade do shooter baseada na distância (Polegadas -> RPM)
     public static final TreeMap<Integer, Integer> SHOOTER_RPM_MAP = new TreeMap<>();
